@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Document Bifurcation & Verification System</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+
+:root{
+  --ink:        #16232E;
+  --ink-soft:   #2E4152;
+  --paper:      #EDE6D3;
+  --paper-hi:   #F7F2E4;
+  --card:       #FBF8EF;
+  --line:       rgba(22,35,46,0.16);
+  --line-soft:  rgba(22,35,46,0.08);
+  --muted:      #5C6B72;
+  --teal:       #2F6F62;
+  --teal-ink:   #1E4A40;
+  --rust:       #B4432F;
+  --rust-ink:   #7E2E1F;
+  --warn-500:   #B4432F;
+
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+  --font-body: 'IBM Plex Sans', system-ui, sans-serif;
+
+  --radius-sm: 3px;
+  --radius-md: 6px;
+}
+
+*{ box-sizing: border-box; }
+html{ -webkit-text-size-adjust: 100%; }
+
+body{
+  margin:0;
+  min-height:100vh;
+  background: var(--paper);
+  background-image: radial-gradient(ellipse at 15% -10%, var(--paper-hi), var(--paper) 55%);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+a{ color: inherit; }
+button{ font-family: inherit; }
+
+.skip-link{ position:absolute; left:-999px; top:auto; }
+.skip-link:focus{
+  left: 1rem; top: 1rem; z-index: 100;
+  background: var(--ink); color: var(--paper-hi);
+  padding: .5rem .75rem; border-radius: var(--radius-sm);
+}
+
+:focus-visible{ outline: 2px solid var(--teal); outline-offset: 2px; }
+
+.shell{ max-width: 780px; margin: 0 auto; padding: 2rem 1.25rem 5rem; }
+
+.masthead{ display:flex; align-items:center; justify-content: space-between; margin-bottom: 2rem; }
+.brand{ display:flex; align-items:center; gap:.6rem; }
+.mark{ width: 30px; height: 30px; flex: none; }
+.wordmark{ font-family: var(--font-display); font-weight: 600; font-size: 1.25rem; letter-spacing: 0.01em; }
+.wordmark em{ font-style: italic; font-weight: 500; color: var(--muted); }
+
+.route{ display:flex; align-items:flex-start; margin: 0 0 2.25rem; padding: 0 .25rem; }
+.route-stop{ display:flex; flex-direction:column; align-items:center; gap: .5rem; width: 100%; cursor:pointer; background:none; border:none; font-family:inherit; }
+.route-stop .dot{
+  width: 30px; height: 30px; border-radius: 50%; border: 1.5px solid var(--ink);
+  display:flex; align-items:center; justify-content:center;
+  font-family: var(--font-mono); font-size: .8rem; background: var(--paper); color: var(--ink);
+}
+.route-stop.done .dot{ background: var(--ink); color: var(--paper-hi); }
+.route-stop.current .dot{ background: var(--teal); border-color: var(--teal); color: var(--paper-hi); }
+.route-stop .label{ font-size: .78rem; color: var(--muted); }
+.route-stop.current .label{ color: var(--ink); font-weight: 500; }
+
+.route-line{
+  flex:none; width: 100%; height: 1.5px; margin-top: 15px;
+  background-image: linear-gradient(to right, var(--ink) 55%, transparent 0%);
+  background-size: 8px 1.5px; background-repeat: repeat-x; min-width: 24px;
+}
+.route-line.done{ background-image: linear-gradient(to right, var(--ink) 100%, transparent 0%); }
+
+.doc{
+  position: relative; background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  box-shadow: 0 1px 0 rgba(22,35,46,0.03), 0 12px 28px -20px rgba(22,35,46,0.45);
+  padding: 2rem 1.75rem 1.75rem; overflow: hidden;
+}
+.doc::before{
+  content:""; position:absolute; top:0; left:0; right:0; height:10px;
+  background-image: radial-gradient(circle, var(--paper) 2.4px, transparent 2.5px);
+  background-size: 16px 10px; background-position: 8px 0;
+}
+
+.doc-head{ margin: 0 0 1.5rem; }
+.doc-head h1{ font-family: var(--font-display); font-weight: 600; font-size: 1.6rem; margin: 0 0 .4rem; }
+.doc-head p{ margin: 0; color: var(--muted); font-size: .94rem; max-width: 52ch; }
+.step-tag{ display:block; font-family: var(--font-mono); font-size: .74rem; color: var(--teal-ink); margin: 0 0 .6rem; }
+
+.field-grid{ display:grid; grid-template-columns: 1fr 1fr; gap: 1.1rem 1rem; }
+.field{ display:flex; flex-direction: column; gap: .4rem; }
+.field.full{ grid-column: 1 / -1; }
+.field label{ font-size: .82rem; font-weight: 500; color: var(--ink-soft); }
+.field input, .field select{
+  font-family: var(--font-mono); font-size: .92rem; padding: .65rem .7rem;
+  border: 1px solid var(--line); border-radius: var(--radius-sm);
+  background: var(--paper-hi); color: var(--ink); width: 100%;
+}
+.field input:focus, .field select:focus{ border-color: var(--teal); }
+.field input::placeholder{ color: #9AA6AC; font-family: var(--font-body); }
+
+.err{ min-height: 1.1em; font-size: .76rem; color: var(--rust-ink); }
+
+.form-actions{
+  display:flex; justify-content: flex-end; align-items:center; gap: 1rem;
+  margin-top: 1.75rem; padding-top: 1.25rem; border-top: 1px dashed var(--line);
+}
+.form-note{ font-size: .78rem; color: var(--muted); margin-right: auto; }
+
+.btn{
+  font-family: var(--font-mono); font-size: .86rem; font-weight: 500;
+  padding: .7rem 1.2rem; border-radius: var(--radius-sm); border: 1px solid var(--ink);
+  background: transparent; color: var(--ink); cursor: pointer; text-decoration: none;
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem;
+  transition: all 0.15s ease;
+}
+.btn-primary{ background: var(--ink); color: var(--paper-hi); }
+.btn-primary:hover{ background: var(--ink-soft); }
+.btn:disabled{ opacity: .55; cursor: not-allowed; }
+.btn-secondary{ border-color: var(--line); background: var(--paper-hi); color: var(--ink); }
+.btn-secondary:hover{ border-color: var(--ink); }
+
+.upload-grid{ display:grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
+.upload-block h2{ font-family: var(--font-body); font-size: .92rem; font-weight: 600; margin: 0 0 .6rem; }
+.dropzone{
+  border: 1.5px dashed var(--line); border-radius: var(--radius-md); background: var(--paper-hi);
+  padding: 1.6rem 1rem; text-align: center; cursor: pointer; transition: all 0.15s ease;
+}
+.dropzone:hover, .dropzone.is-drag{ border-color: var(--teal); background: #F0F3EE; }
+.dropzone svg{ width: 28px; height: 28px; margin: 0 auto .6rem; color: var(--muted); }
+.dropzone .zone-title{ font-size: .88rem; font-weight: 500; margin: 0 0 .2rem; }
+.dropzone .zone-hint{ font-size: .76rem; color: var(--muted); margin: 0; }
+
+.visually-hidden{ position:absolute; width:1px; height:1px; overflow:hidden; clip: rect(0 0 0 0); white-space:nowrap; }
+
+.thumb-grid{ display:grid; grid-template-columns: repeat(2, 1fr); gap: .5rem; margin-top: .75rem; }
+.thumb{ position:relative; border-radius: var(--radius-sm); overflow:hidden; border: 1px solid var(--line); aspect-ratio: 4/3; background: var(--paper); }
+.thumb img{ width:100%; height:100%; object-fit: contain; display:block; background: #222; }
+.thumb .tag{
+  position:absolute; left:4px; bottom:4px; font-family: var(--font-mono); font-size: .62rem;
+  background: rgba(22,35,46,0.85); color: var(--paper-hi); padding: .15rem .4rem; border-radius: 2px;
+  max-width: 85%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.thumb .rm{
+  position:absolute; top:3px; right:3px; width: 20px; height: 20px; border-radius: 50%;
+  border: none; background: rgba(22,35,46,0.85); color: var(--paper-hi); font-size: .7rem;
+  line-height: 1; cursor:pointer; display:flex; align-items:center; justify-content:center;
+}
+.thumb .rm:hover{ background: var(--rust); }
+
+/* Sample picker */
+.sample-section{
+  margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px dashed var(--line);
+}
+.sample-title{ font-size: .82rem; font-weight: 600; margin: 0 0 .6rem; color: var(--ink-soft); }
+.chip-grid{ display: flex; flex-wrap: wrap; gap: .5rem; }
+.sample-chip{
+  font-family: var(--font-mono); font-size: .75rem; padding: .4rem .65rem;
+  border-radius: var(--radius-sm); border: 1px solid var(--line);
+  background: var(--paper-hi); color: var(--ink); cursor: pointer;
+  display: inline-flex; align-items: center; gap: .35rem; transition: all 0.15s ease;
+}
+.sample-chip:hover{ border-color: var(--teal); background: #EEF3EE; }
+.sample-chip.selected{ border-color: var(--teal); background: var(--teal); color: var(--paper-hi); font-weight: 500; }
+.sample-chip .badge{ font-size: .65rem; padding: .1rem .3rem; border-radius: 2px; background: rgba(0,0,0,0.1); }
+
+/* Result Page */
+.recap{ display:grid; gap: .55rem; margin-bottom: 1.5rem; }
+.recap > div{ display:flex; justify-content: space-between; gap: 1rem; padding-bottom: .55rem; border-bottom: 1px solid var(--line-soft); font-size: .88rem; }
+.recap .k{ color: var(--muted); }
+.recap .v{ font-family: var(--font-mono); text-align: right; }
+
+.verdict-card:not(.verified):not(.flagged){ display: none; }
+.verdict-card{
+  margin-top: 1.75rem; padding-top: 1.75rem; border-top: 1px dashed var(--line);
+  display:flex; gap: 1.25rem; align-items: flex-start;
+}
+.stamp{
+  flex: none; width: 84px; height: 84px; border-radius: 50%; border: 2.5px dashed var(--muted);
+  display:flex; align-items:center; justify-content:center; transform: rotate(-8deg); font-family: var(--font-display);
+}
+.verdict-card.verified .stamp{ border-color: var(--teal); color: var(--teal-ink); }
+.verdict-card.flagged .stamp{ border-color: var(--rust); color: var(--rust-ink); }
+.verdict-badge{ font-size: 1.4rem; font-weight: 700; letter-spacing: 0.05em; }
+.verdict-body{ flex: 1; min-width: 0; }
+.verdict-tag{ display: inline-block; font-family: var(--font-mono); font-size: .72rem; padding: .15rem .45rem; border-radius: 2px; font-weight: 600; margin-bottom: .3rem; }
+.verdict-card.verified .verdict-tag{ background: #D9EFE8; color: var(--teal-ink); }
+.verdict-card.flagged .verdict-tag{ background: #F8DBD5; color: var(--rust-ink); }
+.verdict-title{ font-family: var(--font-display); font-weight: 600; font-size: 1.35rem; margin: .1rem 0 .25rem; }
+.verdict-sub{ margin: 0 0 .9rem; color: var(--muted); font-size: .9rem; }
+.reason-list{ list-style: none; margin: 0; padding: 0; display:grid; gap: .45rem; }
+.reason-list li{ font-size: .84rem; padding-left: 1.2rem; position: relative; line-height: 1.4; }
+.reason-list li::before{ content:""; position:absolute; left:0; top:.45em; width:7px; height:7px; border-radius:50%; }
+.reason-list li.ok::before{ background: var(--teal); }
+.reason-list li.bad::before{ background: var(--rust); }
+.reason-list li.info::before{ background: var(--muted); }
+
+/* Extracted details block */
+.extracted-box{
+  margin-top: 1.5rem; background: var(--paper-hi); border: 1px solid var(--line);
+  border-radius: var(--radius-sm); padding: 1rem; font-size: .84rem;
+}
+.extracted-box h3{ font-size: .88rem; margin: 0 0 .6rem; font-family: var(--font-body); font-weight: 600; }
+.data-table{ width: 100%; border-collapse: collapse; }
+.data-table td{ padding: .35rem 0; border-bottom: 1px solid var(--line-soft); font-family: var(--font-mono); font-size: .8rem; }
+.data-table td:first-child{ color: var(--muted); font-family: var(--font-body); width: 40%; }
+
+/* Modal */
+.modal-backdrop{
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(22,35,46,0.6);
+  display: none; align-items: center; justify-content: center; z-index: 999; padding: 1rem;
+}
+.modal-backdrop.active{ display: flex; }
+.modal-card{
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-md);
+  max-width: 680px; width: 100%; max-height: 85vh; overflow-y: auto; padding: 1.75rem;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+}
+.modal-header{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+.modal-header h2{ font-family: var(--font-display); font-size: 1.3rem; margin: 0; }
+.db-tabs{ display: flex; gap: .5rem; margin-bottom: 1rem; border-bottom: 1px solid var(--line); padding-bottom: .5rem; }
+.db-tab-btn{
+  background: none; border: none; font-family: var(--font-mono); font-size: .85rem;
+  padding: .4rem .75rem; cursor: pointer; color: var(--muted);
+}
+.db-tab-btn.active{ color: var(--ink); font-weight: 600; border-bottom: 2px solid var(--teal); }
+
+.page{ display:none; }
+.page.active{ display:block; }
+
+.spinner{
+  width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.4);
+  border-top-color: #fff; border-radius: 50%; animation: spin 0.6s linear infinite; display: inline-block;
+}
+@keyframes spin{ to{ transform: rotate(360deg); } }
+
+@media (max-width: 560px){
+  .field-grid{ grid-template-columns: 1fr; }
+  .upload-grid{ grid-template-columns: 1fr; }
+  .doc{ padding: 1.5rem 1.15rem 1.35rem; }
+  .form-actions{ flex-wrap: wrap; }
+  .form-note{ margin-right: 0; order: 2; }
+}
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to form</a>
+
+<div class="shell">
+  <header class="masthead">
+    <div class="brand">
+      <svg class="mark" viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="15" cy="15" r="12.5" stroke="#16232E" stroke-width="1.5"/>
+        <path d="M20 10L13 17M20 10L15.5 20L13 17L10 14.5L20 10Z" fill="#16232E"/>
+      </svg>
+      <span class="wordmark">Document <em>Bifurcation & Verification</em></span>
+    </div>
+    <button type="button" class="btn btn-secondary" id="dbModalBtn" style="font-size: .78rem; padding: .45rem .8rem;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5M3 12c0 1.66 4 3 9 3s9-1.34 9-3M3 5c0 1.66 4 3 9 3s9-1.34 9-3"/></svg>
+      View Database
+    </button>
+  </header>
+
+  <nav class="route" aria-label="Progress">
+    <button type="button" class="route-stop" id="navStop1" onclick="goTo('details')">
+      <span class="dot">1</span><span class="label">Details</span>
+    </button>
+    <div class="route-line" id="line1" aria-hidden="true"></div>
+    <button type="button" class="route-stop" id="navStop2" onclick="goTo('upload')">
+      <span class="dot">2</span><span class="label">Documents</span>
+    </button>
+    <div class="route-line" id="line2" aria-hidden="true"></div>
+    <button type="button" class="route-stop" id="navStop3" onclick="goTo('result')">
+      <span class="dot">3</span><span class="label">Result</span>
+    </button>
+  </nav>
+
+  <!-- ================= PAGE 1: DETAILS ================= -->
+  <main id="page-details" class="doc page active">
+    <div class="doc-head">
+      <span class="step-tag">Step 1 of 3</span>
+      <h1>Applicant Details</h1>
+      <p>Enter applicant details below. You may also leave them blank and let the OCR & MRZ pipeline extract them automatically.</p>
+    </div>
+
+    <form id="detailsForm" novalidate>
+      <div class="field-grid">
+        <div class="field full">
+          <label for="fullName">Full name</label>
+          <input type="text" id="fullName" name="fullName" placeholder="e.g. Rahul Kumar or Vihaan Shah" autocomplete="name">
+          <span class="err" data-for="fullName"></span>
+        </div>
+        <div class="field">
+          <label for="passportNo">Passport number</label>
+          <input type="text" id="passportNo" name="passportNo" placeholder="e.g. X0001006">
+          <span class="err" data-for="passportNo"></span>
+        </div>
+        <div class="field">
+          <label for="nationality">Nationality</label>
+          <select id="nationality" name="nationality">
+            <option value="">Auto-detect / Select…</option>
+            <option value="IN">India</option>
+            <option value="US">United States</option>
+            <option value="GB">United Kingdom</option>
+            <option value="CA">Canada</option>
+            <option value="AU">Australia</option>
+            <option value="DE">Germany</option>
+            <option value="other">Other</option>
+          </select>
+          <span class="err" data-for="nationality"></span>
+        </div>
+        <div class="field">
+          <label for="dob">Date of birth</label>
+          <input type="date" id="dob" name="dob">
+          <span class="err" data-for="dob"></span>
+        </div>
+        <div class="field">
+          <label for="expiry">Passport / Document expiry</label>
+          <input type="date" id="expiry" name="expiry">
+          <span class="err" data-for="expiry"></span>
+        </div>
+        <div class="field">
+          <label for="phone">Phone</label>
+          <input type="tel" id="phone" name="phone" placeholder="+91 98765 43210" autocomplete="tel">
+          <span class="err" data-for="phone"></span>
+        </div>
+        <div class="field">
+          <label for="email">Email</label>
+          <input type="email" id="email" name="email" placeholder="applicant@example.com" autocomplete="email">
+          <span class="err" data-for="email"></span>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <span class="form-note">Optional fields are auto-completed by document scan.</span>
+        <button type="submit" class="btn btn-primary">Continue to documents</button>
+      </div>
+    </form>
+  </main>
+
+  <!-- ================= PAGE 2: UPLOAD ================= -->
+  <main id="page-upload" class="doc page">
+    <div class="doc-head">
+      <span class="step-tag">Step 2 of 3</span>
+      <h1>Upload Documents</h1>
+      <p>Upload the document photo (Passport or Visa). An optional live selfie can be uploaded for 1-to-1 facial identity verification.</p>
+    </div>
+
+    <form id="uploadForm" novalidate>
+      <div class="upload-grid">
+        <div class="upload-block">
+          <h2>1. Live photo (Selfie / Reference)</h2>
+          <div class="dropzone" id="liveZone" tabindex="0" role="button" aria-label="Upload a live selfie">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 8a2 2 0 0 1 2-2h1.2l.9-1.6A1 1 0 0 1 8.96 4h6.08a1 1 0 0 1 .86.4L16.8 6H18a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8Z"/>
+              <circle cx="12" cy="13" r="3.2"/>
+            </svg>
+            <p class="zone-title">Upload live selfie (optional)</p>
+            <p class="zone-hint">Click or drop reference portrait</p>
+          </div>
+          <input class="visually-hidden" type="file" id="liveInput" accept="image/*">
+          <div class="thumb-grid" id="liveGrid"></div>
+        </div>
+
+        <div class="upload-block">
+          <h2>2. Document photo (Required)</h2>
+          <div class="dropzone" id="docZone" tabindex="0" role="button" aria-label="Upload a document photo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="4" y="3.5" width="16" height="17" rx="1.5"/>
+              <path d="M7.5 8.5h4M7.5 12h9M7.5 15.5h9"/>
+            </svg>
+            <p class="zone-title">Upload document photo</p>
+            <p class="zone-hint">Passport or Visa (JPG/PNG)</p>
+          </div>
+          <input class="visually-hidden" type="file" id="docInput" accept="image/*">
+          <div class="thumb-grid" id="docGrid"></div>
+        </div>
+      </div>
+
+      <!-- Sample document picker for fast testing -->
+      <div class="sample-section">
+        <p class="sample-title">Or Test Instantly With Sample Documents:</p>
+        <div class="chip-grid" id="sampleChips">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+
+      <span class="err" id="uploadErr" style="display:block; margin-top:.75rem;"></span>
+
+      <div class="form-actions">
+        <button type="button" class="btn btn-secondary" onclick="goTo('details')">Back</button>
+        <button type="submit" class="btn btn-primary">Continue to result</button>
+      </div>
+    </form>
+  </main>
+
+  <!-- ================= PAGE 3: RESULT ================= -->
+  <main id="page-result" class="doc page">
+    <div class="doc-head">
+      <span class="step-tag">Step 3 of 3</span>
+      <h1>Verification & Screening Results</h1>
+      <p>Confirm documents and details, then execute bifurcation, MRZ validation, database verification, and storage.</p>
+    </div>
+
+    <div id="resultBody">
+      <div class="recap" id="dataRecap"></div>
+
+      <div class="form-actions" style="border-top:none; padding-top:0;">
+        <span class="form-note">Verifies against Passport.json / Visas.json</span>
+        <button type="button" class="btn btn-primary" id="verifyBtn">
+          <span>Run Check & Verify</span>
+        </button>
+      </div>
+
+      <div class="verdict-card" id="verdictCard">
+        <div class="stamp"><span class="verdict-badge">PASS</span></div>
+        <div class="verdict-body">
+          <span class="verdict-tag" id="verdictTypeTag">DOCUMENT</span>
+          <h2 class="verdict-title" id="verdictTitle">Status</h2>
+          <p class="verdict-sub" id="verdictSub"></p>
+          <ul class="reason-list" id="reasonList"></ul>
+
+          <div class="extracted-box" id="extractedBox" style="display:none;">
+            <h3>Extracted Document Data</h3>
+            <table class="data-table" id="extractedTable"></table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ================= DATABASE MODAL ================= -->
+<div class="modal-backdrop" id="dbModal">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h2>Local JSON Database</h2>
+      <button type="button" class="btn btn-secondary" id="closeDbModal" style="padding: .3rem .6rem;">✕</button>
+    </div>
+    <div class="db-tabs">
+      <button type="button" class="db-tab-btn active" id="tabPassports">Passports (Passport.json)</button>
+      <button type="button" class="db-tab-btn" id="tabVisas">Visas (Visas.json)</button>
+    </div>
+    <div id="dbContent" style="font-family: var(--font-mono); font-size: .82rem; background: var(--paper-hi); padding: 1rem; border-radius: var(--radius-sm); max-height: 400px; overflow: auto;">
+      Loading database...
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   Application State & Router
+   ============================================================ */
+const STORE = {
+  form: {},
+  liveFile: null,
+  livePreview: null,
+  docFile: null,
+  docPreview: null,
+  sampleDocPath: null,
+  sampleDocName: null,
+  lastResult: null,
+};
+
+function goTo(page){
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  const target = document.getElementById('page-' + page);
+  if (target) target.classList.add('active');
+
+  const order = ['details','upload','result'];
+  const idx = order.indexOf(page);
+  order.forEach((p, i) => {
+    const stop = document.getElementById('navStop' + (i+1));
+    if (!stop) return;
+    stop.classList.remove('done','current');
+    if(i < idx) stop.classList.add('done');
+    if(i === idx) stop.classList.add('current');
+    const dot = stop.querySelector('.dot');
+    if (dot) dot.textContent = i < idx ? '✓' : (i+1);
+  });
+  const l1 = document.getElementById('line1');
+  const l2 = document.getElementById('line2');
+  if (l1) l1.classList.toggle('done', idx > 0);
+  if (l2) l2.classList.toggle('done', idx > 1);
+
+  if(page === 'upload') wireUploadPage();
+  if(page === 'result') wireResultPage();
+  window.scrollTo({top:0, behavior:'instant'});
+}
+
+/* ============================================================
+   Page 1: Details Form Handling
+   ============================================================ */
+const detailsForm = document.getElementById('detailsForm');
+if (detailsForm) {
+  detailsForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const formData = new FormData(detailsForm);
+    STORE.form = {
+      fullName: formData.get('fullName')?.trim() || '',
+      passportNo: formData.get('passportNo')?.trim().toUpperCase() || '',
+      nationality: formData.get('nationality') || '',
+      dob: formData.get('dob') || '',
+      expiry: formData.get('expiry') || '',
+      phone: formData.get('phone')?.trim() || '',
+      email: formData.get('email')?.trim() || '',
+    };
+    goTo('upload');
+  });
+}
+
+/* ============================================================
+   Page 2: Upload Documents & Sample Selector
+   ============================================================ */
+let samplesLoaded = false;
+
+function wireUploadPage(){
+  const liveZone = document.getElementById('liveZone');
+  const liveInput = document.getElementById('liveInput');
+  const liveGrid = document.getElementById('liveGrid');
+
+  const docZone = document.getElementById('docZone');
+  const docInput = document.getElementById('docInput');
+  const docGrid = document.getElementById('docGrid');
+
+  const uploadForm = document.getElementById('uploadForm');
+  const uploadErr = document.getElementById('uploadErr');
+
+  // Setup Live Dropzone
+  setupDropzone(liveZone, liveInput, (file) => {
+    STORE.liveFile = file;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      STORE.livePreview = e.target.result;
+      renderThumb(liveGrid, file.name, e.target.result, () => {
+        STORE.liveFile = null;
+        STORE.livePreview = null;
+        liveGrid.innerHTML = '';
+      });
+    };
+    reader.readAsDataURL(file);
+  });
+
+  // Setup Document Dropzone
+  setupDropzone(docZone, docInput, (file) => {
+    STORE.docFile = file;
+    STORE.sampleDocPath = null;
+    clearSampleChipSelection();
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      STORE.docPreview = e.target.result;
+      renderThumb(docGrid, file.name, e.target.result, () => {
+        STORE.docFile = null;
+        STORE.docPreview = null;
+        docGrid.innerHTML = '';
+      });
+    };
+    reader.readAsDataURL(file);
+    if (uploadErr) uploadErr.textContent = '';
+  });
+
+  // Load sample images once
+  if (!samplesLoaded) {
+    loadSampleImages();
+    samplesLoaded = true;
+  }
+
+  // Submit Upload Form
+  uploadForm.onsubmit = (e) => {
+    e.preventDefault();
+    if (!STORE.docFile && !STORE.sampleDocPath) {
+      if (uploadErr) uploadErr.textContent = 'Please upload a document photo or select one of the samples below.';
+      return;
+    }
+    if (uploadErr) uploadErr.textContent = '';
+    goTo('result');
+  };
+}
+
+function setupDropzone(zone, input, onFileSelected){
+  if (!zone || !input) return;
+
+  zone.onclick = () => input.click();
+  input.onchange = () => {
+    if (input.files && input.files[0]) {
+      onFileSelected(input.files[0]);
+    }
+  };
+
+  zone.ondragover = (e) => {
+    e.preventDefault();
+    zone.classList.add('is-drag');
+  };
+  zone.ondragleave = () => zone.classList.remove('is-drag');
+  zone.ondrop = (e) => {
+    e.preventDefault();
+    zone.classList.remove('is-drag');
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      onFileSelected(e.dataTransfer.files[0]);
+    }
+  };
+}
+
+function renderThumb(container, label, src, onRemove){
+  container.innerHTML = `
+    <div class="thumb">
+      <img src="${src}" alt="${label}">
+      <span class="tag" title="${label}">${label}</span>
+      <button type="button" class="rm" title="Remove">✕</button>
+    </div>
+  `;
+  container.querySelector('.rm').onclick = (e) => {
+    e.stopPropagation();
+    onRemove();
+  };
+}
+
+function clearSampleChipSelection(){
+  document.querySelectorAll('.sample-chip').forEach(c => c.classList.remove('selected'));
+}
+
+async function loadSampleImages(){
+  const chipGrid = document.getElementById('sampleChips');
+  if (!chipGrid) return;
+
+  try {
+    const res = await fetch('/api/samples');
+    const data = await res.json();
+    chipGrid.innerHTML = '';
+
+    data.samples.forEach((s) => {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'sample-chip';
+      chip.innerHTML = `
+        <span class="badge">${s.category.toUpperCase()}</span>
+        <span>${s.label}</span>
+      `;
+      chip.onclick = () => {
+        clearSampleChipSelection();
+        chip.classList.add('selected');
+
+        STORE.sampleDocPath = s.path;
+        STORE.sampleDocName = s.label;
+        STORE.docFile = null;
+        STORE.docPreview = s.url;
+
+        // Render in document thumbnail grid
+        const docGrid = document.getElementById('docGrid');
+        renderThumb(docGrid, s.label, s.url, () => {
+          STORE.sampleDocPath = null;
+          STORE.sampleDocName = null;
+          STORE.docPreview = null;
+          docGrid.innerHTML = '';
+          clearSampleChipSelection();
+        });
+
+        // Pre-fill Step 1 details if blank
+        if (s.preset) {
+          if (!STORE.form.fullName && s.preset.name) STORE.form.fullName = s.preset.name;
+          if (!STORE.form.passportNo && s.preset.passport_no) STORE.form.passportNo = s.preset.passport_no;
+          if (!STORE.form.dob && s.preset.dob) STORE.form.dob = s.preset.dob;
+          if (!STORE.form.expiry && s.preset.expiry) STORE.form.expiry = s.preset.expiry;
+        }
+
+        const uploadErr = document.getElementById('uploadErr');
+        if (uploadErr) uploadErr.textContent = '';
+      };
+      chipGrid.appendChild(chip);
+    });
+  } catch(err) {
+    console.warn('Could not load samples:', err);
+  }
+}
+
+/* ============================================================
+   Page 3: Result Page & Verification Check
+   ============================================================ */
+function wireResultPage(){
+  const recap = document.getElementById('dataRecap');
+  const verifyBtn = document.getElementById('verifyBtn');
+  const verdictCard = document.getElementById('verdictCard');
+
+  // Reset verdict card state
+  verdictCard.className = 'verdict-card';
+
+  // Build Recap View
+  const docName = STORE.sampleDocName || (STORE.docFile ? STORE.docFile.name : 'None');
+  const liveName = STORE.liveFile ? STORE.liveFile.name : 'None provided';
+
+  recap.innerHTML = `
+    <div><span class="k">Document photo</span><span class="v">${docName}</span></div>
+    <div><span class="k">Live photo</span><span class="v">${liveName}</span></div>
+    <div><span class="k">Applicant name</span><span class="v">${STORE.form.fullName || '(Auto-detect via OCR)'}</span></div>
+    <div><span class="k">Passport number</span><span class="v">${STORE.form.passportNo || '(Auto-detect via OCR)'}</span></div>
+    <div><span class="k">Nationality</span><span class="v">${STORE.form.nationality || '(Auto-detect)'}</span></div>
+    <div><span class="k">Date of birth</span><span class="v">${STORE.form.dob || '(Auto-detect)'}</span></div>
+    <div><span class="k">Expiry date</span><span class="v">${STORE.form.expiry || '(Auto-detect)'}</span></div>
+  `;
+
+  verifyBtn.onclick = async () => {
+    verifyBtn.disabled = true;
+    verifyBtn.innerHTML = `<span class="spinner"></span> <span>Analyzing & Verifying...</span>`;
+
+    try {
+      const formData = new FormData();
+      if (STORE.docFile) {
+        formData.append('docPhoto', STORE.docFile);
+      } else if (STORE.sampleDocPath) {
+        formData.append('sampleDocPath', STORE.sampleDocPath);
+      }
+
+      if (STORE.liveFile) {
+        formData.append('livePhoto', STORE.liveFile);
+      }
+
+      // Add form fields
+      Object.keys(STORE.form).forEach(k => {
+        formData.append(k, STORE.form[k]);
+      });
+      formData.append('store', 'true');
+
+      const response = await fetch('/api/verify', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const res = await response.json();
+      STORE.lastResult = res;
+      renderVerificationResult(res);
+
+    } catch(err) {
+      console.error(err);
+      alert('Error during verification: ' + err.message);
+    } finally {
+      verifyBtn.disabled = false;
+      verifyBtn.innerHTML = `<span>Run Check & Verify</span>`;
+    }
+  };
+}
+
+function renderVerificationResult(res){
+  const card = document.getElementById('verdictCard');
+  const badge = card.querySelector('.verdict-badge');
+  const typeTag = document.getElementById('verdictTypeTag');
+  const title = document.getElementById('verdictTitle');
+  const sub = document.getElementById('verdictSub');
+  const list = document.getElementById('reasonList');
+  const extractedBox = document.getElementById('extractedBox');
+  const extractedTable = document.getElementById('extractedTable');
+
+  const isVerified = res.verification && res.verification.verified;
+  card.className = 'verdict-card ' + (isVerified ? 'verified' : 'flagged');
+  badge.textContent = isVerified ? 'PASS' : 'FLAG';
+
+  typeTag.textContent = res.document_type || 'UNKNOWN';
+  title.textContent = isVerified
+    ? `${res.document_type} VERIFIED & STORED`
+    : `${res.document_type} VERIFICATION FLAGGED`;
+
+  sub.textContent = `Risk Score: ${res.risk.score}/100 — ${res.risk.verdict}`;
+
+  // Build reasons list
+  list.innerHTML = '';
+
+  // 1. Classification
+  const b = res.bifurcation || {};
+  addReasonItem(list, 'ok', `Document bifurcated as <strong>${res.document_type}</strong> (Passport score: ${b.passport_score}, Visa score: ${b.visa_score}, MRZ: ${b.mrz_detected})`);
+
+  // 2. Database Record
+  const v = res.verification || {};
+  if (v.database_found) {
+    addReasonItem(list, 'ok', `Database Match: Record found in <strong>${res.document_type === 'PASSPORT' ? 'Passport.json' : 'Visas.json'}</strong>`);
+  } else {
+    addReasonItem(list, 'bad', `Database Match: Document number not found in database records.`);
+  }
+
+  // 3. MRZ / Extraction
+  const ext = res.extracted_data || {};
+  if (ext.mrz_detected && ext.mrz_validation) {
+    const mv = ext.mrz_validation;
+    if (mv.doc_number_valid && mv.expiry_valid) {
+      addReasonItem(list, 'ok', `MRZ Check Digits: Validated standard ICAO checksums.`);
+    } else {
+      addReasonItem(list, isVerified ? 'info' : 'bad', `MRZ Check Digits: ${mv.error || 'Checksum mismatch or OCR irregularity.'}`);
+    }
+  }
+
+  // 4. Form / DB field matching
+  if (v.issues && v.issues.length > 0) {
+    v.issues.forEach(iss => addReasonItem(list, 'bad', iss));
+  } else {
+    addReasonItem(list, 'ok', `Field Consistency: Extracted fields match database record.`);
+  }
+
+  // 5. Form cross-verification (if user provided fields)
+  if (res.form_verification && res.form_verification.form_checked) {
+    const fv = res.form_verification;
+    if (fv.form_issues && fv.form_issues.length > 0) {
+      fv.form_issues.forEach(fi => addReasonItem(list, 'bad', fi));
+    } else {
+      addReasonItem(list, 'ok', `Form Alignment: User-entered details match document scan.`);
+    }
+  }
+
+  // 6. Facial Identity Check
+  const fm = res.face_match || {};
+  if (fm.comparable) {
+    if (fm.likely_same_person) {
+      addReasonItem(list, 'ok', `Face Match: Selfie matches document photo (${fm.message}).`);
+    } else {
+      addReasonItem(list, 'bad', `Face Mismatch: Selfie did NOT match document photo.`);
+    }
+  }
+
+  // 7. Forensic Checks
+  const fc = res.forensics || {};
+  if (fc.font_check && fc.font_check.suspicious) {
+    addReasonItem(list, 'bad', `Font Check: Irregular font heights detected.`);
+  }
+  if (fc.copy_move && fc.copy_move.suspicious_region) {
+    addReasonItem(list, 'bad', `Forensics: Suspicious copy-move / compression compression artifacts.`);
+  }
+  if (fc.photo_check && fc.photo_check.suspicious_boundary) {
+    addReasonItem(list, 'bad', `Photo Check: High edge density at photo boundary (possible cut-and-paste).`);
+  }
+  if (fc.stamp_check && fc.stamp_check.any_suspicious) {
+    addReasonItem(list, 'info', `Stamp Tamper Check: Non-uniform stamp ink detected.`);
+  }
+
+  // 8. Storage status
+  if (res.storage && res.storage.message) {
+    addReasonItem(list, res.storage.stored ? 'ok' : 'info', `Storage: ${res.storage.message}`);
+  }
+
+  // Extracted Data Table
+  extractedTable.innerHTML = `
+    <tr><td>Document Type</td><td><strong>${res.document_type}</strong></td></tr>
+    <tr><td>Document / Passport No</td><td>${ext.passport_number || 'N/A'}</td></tr>
+    <tr><td>Holder Name</td><td>${ext.name || STORE.form.fullName || 'N/A'}</td></tr>
+    <tr><td>Nationality</td><td>${ext.nationality || STORE.form.nationality || 'N/A'}</td></tr>
+    <tr><td>Date of Birth</td><td>${ext.date_of_birth || STORE.form.dob || 'N/A'}</td></tr>
+    <tr><td>Date of Expiry</td><td>${ext.date_of_expiry || STORE.form.expiry || 'N/A'}</td></tr>
+    ${ext.visa_type ? `<tr><td>Visa Type / Class</td><td>${ext.visa_type}</td></tr>` : ''}
+  `;
+  extractedBox.style.display = 'block';
+}
+
+function addReasonItem(list, type, html){
+  const li = document.createElement('li');
+  li.className = type;
+  li.innerHTML = html;
+  list.appendChild(li);
+}
+
+/* ============================================================
+   Database Modal Viewer
+   ============================================================ */
+const dbModal = document.getElementById('dbModal');
+const dbModalBtn = document.getElementById('dbModalBtn');
+const closeDbModal = document.getElementById('closeDbModal');
+const tabPassports = document.getElementById('tabPassports');
+const tabVisas = document.getElementById('tabVisas');
+const dbContent = document.getElementById('dbContent');
+
+let currentDbData = null;
+let currentTab = 'passports';
+
+if (dbModalBtn) {
+  dbModalBtn.onclick = async () => {
+    dbModal.classList.add('active');
+    dbContent.textContent = 'Loading records from Passport.json & Visas.json...';
+    try {
+      const res = await fetch('/api/database');
+      currentDbData = await res.json();
+      renderDbTab();
+    } catch(err) {
+      dbContent.textContent = 'Error loading database: ' + err.message;
+    }
+  };
+}
+
+if (closeDbModal) {
+  closeDbModal.onclick = () => dbModal.classList.remove('active');
+}
+if (dbModal) {
+  dbModal.onclick = (e) => {
+    if (e.target === dbModal) dbModal.classList.remove('active');
+  };
+}
+
+if (tabPassports) {
+  tabPassports.onclick = () => {
+    currentTab = 'passports';
+    tabPassports.classList.add('active');
+    tabVisas.classList.remove('active');
+    renderDbTab();
+  };
+}
+
+if (tabVisas) {
+  tabVisas.onclick = () => {
+    currentTab = 'visas';
+    tabVisas.classList.add('active');
+    tabPassports.classList.remove('active');
+    renderDbTab();
+  };
+}
+
+function renderDbTab(){
+  if (!currentDbData) return;
+  const records = currentTab === 'passports' ? currentDbData.passports : currentDbData.visas;
+  dbContent.innerHTML = `<pre style="margin:0; white-space:pre-wrap;">${JSON.stringify(records, null, 2)}</pre>`;
+}
+</script>
+</body>
+</html>
