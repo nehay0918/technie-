@@ -27,8 +27,33 @@ from dataclasses import dataclass, field
 # CONFIGURATION
 # =========================================================
 
-PASSPORT_DB = "Passport.json"
-VISA_DB = "Visas.json"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+def resolve_db_path(filename):
+    possible_roots = [
+        BASE_DIR,
+        os.path.dirname(BASE_DIR),
+        os.getcwd(),
+    ]
+    candidates = []
+    for root in possible_roots:
+        candidates.append(os.path.join(root, "DataBase", filename))
+        candidates.append(os.path.join(root, "database", filename))
+        candidates.append(os.path.join(root, filename))
+
+    for c in candidates:
+        if os.path.exists(c):
+            return os.path.abspath(c)
+
+    default_root = (
+        os.path.dirname(BASE_DIR)
+        if os.path.basename(BASE_DIR).lower() == "backhend"
+        else BASE_DIR
+    )
+    return os.path.abspath(os.path.join(default_root, "DataBase", filename))
+
+PASSPORT_DB = resolve_db_path("Passport.json")
+VISA_DB = resolve_db_path("Visas.json")
 
 # If Tesseract is installed at the normal Windows location, this works.
 # If tesseract is already in PATH, leave this as None.
