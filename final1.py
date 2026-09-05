@@ -143,11 +143,14 @@ def detect_mrz_lines(image):
 
     for line in raw_lines:
         cleaned = re.sub(r"\s+", "", line.upper())
-        if len(cleaned) >= 28:
+        if len(cleaned) >= 28 and "<" in cleaned:
             lines.append(cleaned)
 
     if len(lines) >= 2:
-        return lines[-2:], True
+        chevron_count = sum(l.count("<") for l in lines[-2:])
+        # Genuine MRZ format must have either standard P/V line prefix or multiple chevrons
+        if chevron_count >= 3 or lines[-2].startswith(("P", "V")):
+            return lines[-2:], True
 
     return lines, False
 
@@ -174,8 +177,21 @@ def classify_document(image, ocr_text):
         "TYPE P",
     ]
 
-    visa_keywords = [
+    # Specific visa titles / terms get strong weight (+15)
+    strong_visa_keywords = [
         "VISA",
+        "STUDENT'S PASS",
+        "STUDENTS PASS",
+        "TOURISM AND VISIT VISA",
+        "VISIT VISA",
+        "SCHENGEN",
+        "TOURIST VISA",
+        "STUDENT VISA",
+        "BUSINESS VISA",
+        "ENTRY PERMIT",
+    ]
+
+    visa_keywords = [
         "VISA TYPE",
         "CONTROL NUMBER",
         "ISSUING POST",
@@ -187,6 +203,10 @@ def classify_document(image, ocr_text):
         "B1/B2",
         "B-1/B-2",
         "BEARER",
+        "DURATION OF STAY",
+        "CONDITIONS OF ADMISSION",
+        "IMMIGRATION AUTHORITY",
+        "PASS TYPE",
     ]
 
     passport_score = 0
@@ -204,6 +224,11 @@ def classify_document(image, ocr_text):
     elif mrz_detected:
         passport_score += 3
         visa_score += 3
+
+    for keyword in strong_visa_keywords:
+        if keyword in text:
+            visa_score += 15
+            break  # Score once for strong visa indicator
 
     for keyword in passport_keywords:
         if keyword in text:
@@ -404,18 +429,33 @@ def extract_passport_data(image, ocr_text):
 # STAGE 2B - VISA EXTRACTION
 # =========================================================
 
+DISALLOWED_DOC_NUMBERS = {
+    "NUMBER", "PASSPORT", "REPUBLIC", "DOCUMENT", "NATIONAL", "COUNTRY",
+    "INSTITUTION", "CATEGORY", "SURNAME", "GIVEN", "EXPIRY", "ISSUING",
+    "MULTIPLE", "AUTHORITY", "STUDENT", "TOURIST", "BUSINESS", "SINGAPORE",
+    "EXAMPLELAND", "STATES"
+}
+
+
 def normalize_passport_number(value):
     if not value:
         return None
 
     value = re.sub(r"[^A-Z0-9]", "", value.upper())
 
-    if len(value) < 6:
+    if value in DISALLOWED_DOC_NUMBERS or len(value) < 6:
         return None
 
     # Handle standard OCR errors (e.g. letter O -> 0, letter I -> 1 in digit parts)
     if value.startswith("X") and len(value) >= 7:
-        value = "X" + value[1:].replace("O", "0").replace("I", "1")
+        digits = re.sub(r"[^0-9]", "", value[1:].replace("O", "0").replace("I", "1"))
+        # Fix cases where OCR captures an extra 0, e.g. XO0001009 -> 00001009
+        if digits.startswith("0000") and len(digits) >= 8:
+            digits = digits[1:]
+        if len(digits) >= 7:
+            value = "X" + digits[:7]
+        else:
+            value = "X" + digits
     elif len(value) >= 7:
         # Common format: 2 letters followed by 6-7 digits/chars e.g. CZ6311T47
         prefix = value[:2]
@@ -514,25 +554,34 @@ def extract_visa_data(image, ocr_text):
 
     # 2. Extract Passport Number from text if MRZ didn't provide one or for cross-check
     if not result["passport_number"]:
+        # First try explicit X000xxxx passport format
+        match = re.search(r"\b[Xx][0-9OoIil]{6,9}\b", text)
+        if match:
+            cand = normalize_passport_number(match.group(0))
+            if cand:
+                result["passport_number"] = cand
+
+    if not result["passport_number"]:
         passport_patterns = [
-            r"(?:PASSPORT\s*(?:NO|NUMBER|#)?|PASSPORTNO)\s*[:\-]?\s*([A-Z0-9<]{6,12})",
-            r"(?:DOCUMENT\s*(?:NO|NUMBER|#))\s*[:\-]?\s*([A-Z0-9<]{6,12})",
+            r"(?:PASSPORT\s*(?:NO|NUMBER|#)?|PASSPORTNO)\s*[:\-.]?\s*([A-Z0-9<]{6,12})",
+            r"(?:DOCUMENT\s*(?:NO|NUMBER|#))\s*[:\-.]?\s*([A-Z0-9<]{6,12})",
         ]
         for pattern in passport_patterns:
-            match = re.search(pattern, text)
-            if match:
-                result["passport_number"] = normalize_passport_number(match.group(1))
+            for match in re.finditer(pattern, text):
+                cand = normalize_passport_number(match.group(1))
+                if cand:
+                    result["passport_number"] = cand
+                    break
+            if result["passport_number"]:
                 break
 
     if not result["passport_number"]:
-        match = re.search(r"\bX[0-9O]{6,8}\b", text)
-        if match:
-            result["passport_number"] = normalize_passport_number(match.group(0))
-
-    if not result["passport_number"]:
         candidates = re.findall(r"\b[A-Z]{1,2}\d{6,8}[A-Z0-9]?\b", text)
-        if candidates:
-            result["passport_number"] = normalize_passport_number(candidates[0])
+        for cand in candidates:
+            c_norm = normalize_passport_number(cand)
+            if c_norm:
+                result["passport_number"] = c_norm
+                break
 
     # 3. Extract Visa Type
     if re.search(r"\b[B8][\s\-_/]*1\s*/\s*[B8][\s\-_/]*2\b|\b[B8]1/[B8]2\b", text):
